@@ -1,0 +1,171 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transit Museum Photo of the Month</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; overflow-x: hidden; background: transparent; }
+        .brand-font { font-family: 'Oswald', sans-serif; text-transform: uppercase; }
+        :root {
+            --transit-blue: #003366;
+            --transit-red: #c41230;
+            --transit-yellow: #ffcc00;
+        }
+        /* Custom scrollbar for better look inside iframe */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import React, { useState, useEffect } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { MapPin, Clock, Loader2, User } from 'lucide-react';
+        import { GoogleGenAI, Type } from "@google/genai";
+
+        // CONFIGURATION
+        // REPLACE 'process.env.API_KEY' WITH YOUR ACTUAL STRING KEY IF NOT USING ENVIRONMENT VARIABLES
+        const API_KEY = process.env.API_KEY; 
+
+        const fetchPhotoData = async () => {
+          const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+          try {
+            const metadataResponse = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: "Provide metadata for a 'Member's Photo of the Month'. The member is Aurora Rose. The subject is: BC Transit 9528, a Former Alexander Dennis Demonstration Alexander Dennis E500. Location: Heading North on Douglas, 95 Blink to Langford at Douglas & Burdett.",
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    year: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    member: { type: Type.STRING },
+                  },
+                  required: ["title", "year", "location", "member"]
+                }
+              }
+            });
+
+            const metadata = JSON.parse(metadataResponse.text || "{}");
+            const imagePrompt = `A high-quality professional photograph of a BC Transit double-decker bus, fleet number 9528, Alexander Dennis E500. Destination sign '95 RAPIDBUS'. Victoria BC. Sunny day. Modern architecture background. High resolution.`;
+
+            const imageResponse = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image',
+              contents: { parts: [{ text: imagePrompt }] },
+              config: { imageConfig: { aspectRatio: "16:10" } }
+            });
+
+            let imageUrl = "https://picsum.photos/1200/800";
+            for (const part of imageResponse.candidates?.[0]?.content?.parts || []) {
+              if (part.inlineData) {
+                imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+                break;
+              }
+            }
+            return { ...metadata, imageUrl };
+          } catch (e) {
+            console.error(e);
+            throw new Error("Failed to load archive");
+          }
+        };
+
+        const PhotoWidget = () => {
+          const [photo, setPhoto] = useState(null);
+          const [loading, setLoading] = useState(true);
+          const [error, setError] = useState(false);
+
+          useEffect(() => {
+            fetchPhotoData()
+              .then(setPhoto)
+              .catch(() => setError(true))
+              .finally(() => setLoading(false));
+          }, []);
+
+          if (loading) return (
+            <div className="bg-slate-900 rounded-[2.5rem] p-20 flex flex-col items-center justify-center min-h-[600px] text-white mx-4 mt-4">
+              <Loader2 className="w-16 h-16 animate-spin text-[#ffcc00] mb-6" />
+              <p className="brand-font text-xl tracking-[0.3em] opacity-60">Developing Film...</p>
+            </div>
+          );
+
+          if (error) return (
+            <div className="bg-slate-100 rounded-[2.5rem] p-20 flex flex-col items-center justify-center min-h-[600px] text-slate-400 border-2 border-dashed border-slate-200 mx-4 mt-4">
+              <p className="brand-font tracking-widest uppercase">Archive temporarily unavailable</p>
+            </div>
+          );
+
+          return (
+            <div className="p-4">
+              <div className="relative overflow-hidden bg-black rounded-[2.5rem] shadow-2xl group transition-all duration-700">
+                <div className="absolute top-10 left-10 z-20">
+                  <span className="bg-[#c41230] text-white px-8 py-3 rounded-full text-xs font-black brand-font tracking-[0.3em] uppercase shadow-2xl">
+                    Member's Photo of the Month
+                  </span>
+                </div>
+                
+                <div className="relative aspect-[3/4] md:aspect-[16/10] overflow-hidden">
+                  <img src={photo.imageUrl} className="w-full h-full object-cover transition-transform duration-[4s] scale-100 group-hover:scale-105" alt={photo.title} />
+                  
+                  {/* Cinematic Overlays */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-90 transition-opacity duration-700 group-hover:opacity-80"></div>
+                  
+                  {/* Content Container */}
+                  <div className="absolute bottom-0 left-0 right-0 p-12 md:p-24 z-10 flex flex-col md:flex-row md:items-end justify-between gap-12">
+                    <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                      <h2 className="brand-font text-6xl md:text-9xl text-white leading-[0.85] mb-10 tracking-tighter drop-shadow-2xl">
+                        {photo.title}
+                      </h2>
+                      <div className="flex flex-wrap items-center gap-12 text-white/90 font-bold text-base uppercase tracking-[0.25em]">
+                        <span className="flex items-center gap-4"><Clock className="w-7 h-7 text-[#ffcc00]" /> {photo.year}</span>
+                        <span className="flex items-center gap-4"><MapPin className="w-7 h-7 text-[#c41230]" /> {photo.location}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-8 bg-white/10 backdrop-blur-3xl px-12 py-8 rounded-[2.5rem] border border-white/20 shadow-2xl shrink-0">
+                      <div className="w-16 h-16 rounded-full bg-[#ffcc00] flex items-center justify-center text-[#003366] shrink-0 shadow-inner">
+                        <User className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <p className="text-white/40 text-[12px] font-black uppercase tracking-[0.3em] mb-2 leading-none">Photographer</p>
+                        <p className="text-white font-bold brand-font text-3xl tracking-wider leading-none">{photo.member}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-8 text-center opacity-30 hover:opacity-100 transition-opacity duration-500">
+                <p className="text-[10px] font-black brand-font tracking-[0.5em] text-slate-900 uppercase">
+                  Transit Museum Society • Official Member Archive
+                </p>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PhotoWidget />);
+    </script>
+</body>
+</html>
