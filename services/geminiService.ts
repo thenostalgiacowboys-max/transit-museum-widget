@@ -3,54 +3,56 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { TransitPhoto } from "../types";
 
 export const fetchPhotoOfTheMonth = async (): Promise<TransitPhoto> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  // 1. Generate Metadata specifically for BC Transit 9528
-  const metadataResponse = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: "Provide metadata for a 'Member's Photo of the Month'. The member is Aurora Rose. The subject is: BC Transit 9528, a Former Alexander Dennis Demonstration Alexander Dennis E500. Location: Heading North on Douglas, 95 Blink to Langford at Douglas & Burdett. Ensure the title reflects the vehicle model and fleet number.",
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          year: { type: Type.STRING },
-          location: { type: Type.STRING },
-          member: { type: Type.STRING },
-        },
-        required: ["title", "year", "location", "member"]
-      }
-    }
-  });
-
-  const metadata = JSON.parse(metadataResponse.text || "{}");
-
-  // 2. Generate Image matching the user's provided photo characteristics
-  const imagePrompt = `A professional transit photograph of a BC Transit double-decker bus, fleet number 9528, which is an Alexander Dennis Enviro500 (E500). The destination sign displays '95 RAPIDBUS'. The bus is heading North on Douglas Street at the intersection of Burdett Avenue in Victoria, BC. Bright sunny day with blue sky and soft clouds. Modern city background with historical buildings. High-resolution, sharp focus, 35mm lens style.`;
-
-  const imageResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [{ text: imagePrompt }]
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: "16:9"
-      }
-    }
-  });
-
-  let imageUrl = "https://picsum.photos/1200/675";
-  for (const part of imageResponse.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-      break;
-    }
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("API_KEY_MISSING");
   }
 
-  return {
-    ...metadata,
-    imageUrl
-  };
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    // 1. Generate Metadata
+    const metadataResponse = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: "Provide metadata for a 'Member's Photo of the Month' for the Transit Museum Society. Member: Aurora Rose. Subject: BC Transit 9528 (Alexander Dennis E500). Location: Douglas & Burdett, Victoria, BC. Year: 2024.",
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            year: { type: Type.STRING },
+            location: { type: Type.STRING },
+            member: { type: Type.STRING },
+          },
+          required: ["title", "year", "location", "member"]
+        }
+      }
+    });
+
+    const metadata = JSON.parse(metadataResponse.text || "{}");
+
+    // 2. Generate Image
+    const imagePrompt = `A stunning professional transit photograph of a BC Transit double-decker bus, fleet number 9528, Alexander Dennis E500. Destination sign '95 RAPIDBUS'. Driving through downtown Victoria BC. Bright daylight, cinematic lighting, 8k resolution.`;
+
+    const imageResponse = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: [{ text: imagePrompt }] },
+      config: { imageConfig: { aspectRatio: "16:9" } }
+    });
+
+    let imageUrl = "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=1200"; // Fallback
+    for (const part of imageResponse.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        break;
+      }
+    }
+
+    return { ...metadata, imageUrl };
+  } catch (error) {
+    console.error("Gemini Fetch Error:", error);
+    throw error;
+  }
 };
